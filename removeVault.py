@@ -157,11 +157,7 @@ while job['StatusCode'] == 'InProgress':
 
 	job = glacier.describe_job(vaultName=vaultName, jobId=jobID)
 
-if job['StatusCode'] == 'Succeeded':
-	logging.info('Inventory retrieved, parsing data...')
-	job_output = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'])
-	inventory = json.loads(job_output['body'].read().decode('utf-8'))
-
+def treat_inventory(inventory):
 	archiveList = inventory['ArchiveList']
 
 	logging.info('Removing %s archives... please be patient, this may take some time...', len(archiveList));
@@ -176,6 +172,60 @@ if job['StatusCode'] == 'Succeeded':
 	for j in jobs:
 		j.join()
 
+
+if __name__ == '__main__':
+	if job['StatusCode'] == 'Succeeded':
+		logging.info('Inventory retrieved, parsing data...')
+		job['jobId'] = 'Fcp_E3d54GiSehkmJH1M7NVXZVyQEM_RP_7B7Spvxo4m1CUknGNgk7CLlKzcP45yOMlYQAoYrVf0JLlTDCTEZzRwzg_q'
+		job_output = glacier.get_job_output(vaultName=vaultName, jobId=job['jobId'])
+		job_output_body = job_output['body']
+
+		def read(n):
+			return job_output_body.read(n).decode('utf-8')
+
+		prefix = ''
+		while True:
+			prefix += read(1)
+			try:
+				schema = json.loads(prefix + ']}')
+				# Okay, we have our prefix
+				break
+			except:
+				pass
+		bufferSize = 1024 * 1024
+		if 'ArchiveList' not in schema:
+			logging.error('Couldnt retrieve inventory, expecting ArchiveList key in job output')
+		suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+
+		def humansize(nbytes):
+			if nbytes == 0: return '0 B'
+			i = 0
+			while nbytes >= 1024 and i < len(suffixes) - 1:
+				nbytes /= 1024.
+				i += 1
+			f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
+			return '%s %s' % (f, suffixes[i])
+		logging.info('Streaming a %s archives list in blocks of roughly %s '%(humansize(job['InventorySizeInBytes']),humansize(bufferSize)))
+		archiveList = ''
+		while True:
+			# read a big block
+			archiveList = read(bufferSize)
+			while True:
+				# read a character until the string is json-parsable
+				try:
+					inventory = json.loads(prefix + archiveList + ']}')
+					# json parsed okay, we have our json string
+					break
+				except:
+					archiveList += read(1)
+			treat_inventory(inventory)
+			# consume the comma before the next items
+			next = read(1)
+			if next == ']' or next=='':
+				# reached the end !
+				logging.info('OK, removed all the archives')
+				break
+
 	logging.info('Removing vault...')
 	try:
 		glacier.delete_vault(
@@ -185,6 +235,3 @@ if job['StatusCode'] == 'Succeeded':
 	except:
 		printException()
 		logging.error('We cant remove the vault now. Please wait some time and try again. You can also remove it from the AWS console, now that all archives have been removed.')
-
-else:
-	logging.info('Vault retrieval failed.')
