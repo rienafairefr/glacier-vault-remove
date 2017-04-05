@@ -8,19 +8,22 @@ import time
 import os
 import logging
 import boto3
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 from socket import gethostbyname, gaierror
 
-def split_list(alist, wanted_parts=1):
-	length = len(alist)
-	return [ alist[i*length // wanted_parts: (i+1)*length // wanted_parts] 
-		for i in range(wanted_parts) ]
-
-def process_archive(archive_list):
-	logging.info('Starting work on %s items', len(archive_list))
-	for index, archive in enumerate(archive_list):
+queue = Queue()
+def process_archive(q):
+	while True:
+		try:
+			archive = q.get()
+		except:
+			time.sleep(5)
+			try:
+				archive = q.get()
+			except:
+				break
 		if archive['ArchiveId'] != '':
-			logging.info('%s Remove archive number %s of %s, ID : %s', os.getpid(), index, len(archive_list), archive['ArchiveId'])
+			logging.info('%s Remove archive ID : %s', os.getpid(), archive['ArchiveId'])
 			try:
 				glacier.delete_archive(
 				    vaultName=vaultName,
@@ -41,6 +44,7 @@ def process_archive(archive_list):
 					logging.info('Successfully removed archive ID : %s', archive['ArchiveId'])
 				except:
 					logging.error('Cannot remove archive ID : %s', archive['ArchiveId'])
+					break
 
 def printException():
 	exc_type, exc_value = sys.exc_info()[:2]
@@ -157,21 +161,33 @@ while job['StatusCode'] == 'InProgress':
 
 	job = glacier.describe_job(vaultName=vaultName, jobId=jobID)
 
-if job['StatusCode'] == 'Succeeded':
+if __name__ == "__main__" and job['StatusCode'] == 'Succeeded':
 	logging.info('Inventory retrieved, parsing data...')
-	job_output = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'])
-	inventory = json.loads(job_output['body'].read().decode('utf-8'))
 
-	archiveList = inventory['ArchiveList']
 
-	logging.info('Removing %s archives... please be patient, this may take some time...', len(archiveList));
-	archiveParts = split_list(archiveList, numProcess)
+	buffersize = -1
+	class InventoryRead(object):
+		def __init__(self):
+			pass
+		def get(self):
+			if buffersize==-1:
+				job_output = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'])
+				inventory = json.loads(job_output['body'].read().decode('utf-8'))
+				for archive in inventory['ArchiveList']:
+					yield archive
+			else:
+				pass
+
+	reader = InventoryRead()
+
 	jobs = []
-
-	for archive in archiveParts:
-		p = Process(target=process_archive, args=(archive,))
+	for i in range(numProcess):
+		p = Process(target=process_archive, args=(queue,))
 		jobs.append(p)
 		p.start()
+
+	for archive in reader.get():
+		queue.put(archive)
 
 	for j in jobs:
 		j.join()
