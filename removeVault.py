@@ -11,7 +11,7 @@ import boto3
 from multiprocessing import Process, Queue
 from socket import gethostbyname, gaierror
 
-queue = Queue()
+queue = Queue(100)
 def process_archive(q):
 	while True:
 		try:
@@ -164,19 +164,61 @@ while job['StatusCode'] == 'InProgress':
 if __name__ == "__main__" and job['StatusCode'] == 'Succeeded':
 	logging.info('Inventory retrieved, parsing data...')
 
+	bufferSize = 5*1024*1024
 
-	buffersize = -1
 	class InventoryRead(object):
 		def __init__(self):
-			pass
+			self.seek=0
+		def read(self,n):
+			returnvalue = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'],
+												 range='bytes=%d-%d' % (self.seek, self.seek + n))['body'].read(n).decode('utf-8')
+			self.seek += n
+			return returnvalue
+
 		def get(self):
-			if buffersize==-1:
+			if bufferSize==-1:
 				job_output = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'])
 				inventory = json.loads(job_output['body'].read().decode('utf-8'))
 				for archive in inventory['ArchiveList']:
 					yield archive
 			else:
-				pass
+				prefix = reader.read(bufferSize)
+				archiveList=None
+				for i in range(1, bufferSize):
+					try:
+						schema = json.loads(prefix[0:i] + ']}')
+						# Okay, we have our prefix
+						archiveList = prefix[i:]
+						prefix = prefix[0:i]
+						break
+					except:
+						pass
+
+				if archiveList is None:
+					logging.error('Error in the JSON format, can''t stream it from get_job_output')
+
+				while True:
+					# read a big block
+					archiveList += self.read(bufferSize)
+					try:
+						inventory = json.loads(prefix+archiveList)
+						# if this parses, it means we are at the end of the list
+						for archive in inventory['ArchiveList']:
+							yield archive
+						break
+					except:
+						for i in range(1,5000):
+							# loooping, each loop removes a character until the string is valid json
+							try:
+								inventory = json.loads(prefix + archiveList[0:-i] + ']}')
+								# json parsed okay, we have our json string
+								for archive in inventory['ArchiveList']:
+									yield archive
+								break
+							except:
+								pass
+
+
 
 	reader = InventoryRead()
 
