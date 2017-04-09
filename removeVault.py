@@ -10,18 +10,22 @@ import logging
 import boto3
 from multiprocessing import Process, Queue
 from socket import gethostbyname, gaierror
+import shutil
 
+im_done = 'I''m done'
 queue = Queue(100)
 def process_archive(q):
 	while True:
 		try:
-			archive = q.get()
-		except:
-			time.sleep(5)
-			try:
-				archive = q.get()
-			except:
-				break
+			archive = q.get(timeout=10)
+		except Exception as e:
+			pass
+
+		if archive == im_done:
+			#send it back in the queue for the other consumers
+			q.put(im_done)
+			break
+
 		if archive['ArchiveId'] != '':
 			logging.info('%s Remove archive ID : %s', os.getpid(), archive['ArchiveId'])
 			try:
@@ -78,14 +82,13 @@ elif len(sys.argv) == 5:
 logging.info('Running with %s processes', numProcess)
 
 os.environ['AWS_DEFAULT_REGION'] = regionName
-
 # Load credentials
 try:
 	f = open('credentials.json', 'r')
 	config = json.loads(f.read())
 	f.close()
 
- 	os.environ['AWS_ACCESS_KEY_ID'] = config['AWSAccessKeyId']
+	os.environ['AWS_ACCESS_KEY_ID'] = config['AWSAccessKeyId']
 	os.environ['AWS_SECRET_ACCESS_KEY'] = config['AWSSecretKey']
 
 except:
@@ -103,146 +106,155 @@ except:
 	printException()
 	sys.exit(1)
 
-if vaultName == 'LIST':
+def main():
+	if vaultName == 'LIST':
+		try:
+			logging.info('Getting list of vaults...')
+			response = glacier.list_vaults()
+		except:
+			printException()
+			sys.exit(1)
+
+		for vault in response['VaultList']:
+			logging.info(vault['VaultName'])
+
+		exit(0)
+
 	try:
-		logging.info('Getting list of vaults...')
-		response = glacier.list_vaults()
+		logging.info('Getting selected vault... [{v}]'.format(v=vaultName))
+		vault = glacier.describe_vault(vaultName=vaultName)
+		logging.info("Working on ARN {arn}".format(arn=vault['VaultARN']))
 	except:
 		printException()
 		sys.exit(1)
 
-	for vault in response['VaultList']:
-		logging.info(vault['VaultName'])
+	logging.info('Getting jobs list...')
+	response = glacier.list_jobs(vaultName=vaultName)
+	jobID = ''
 
-	exit(0)
+	# Check if a job already exists
+	for job in response['JobList']:
+		if job['Action'] == 'InventoryRetrieval':
+			logging.info('Found existing inventory retrieval job...')
+			jobID = job['JobId']
 
-try:
-	logging.info('Getting selected vault... [{v}]'.format(v=vaultName))
-	vault = glacier.describe_vault(vaultName=vaultName)
-	logging.info("Working on ARN {arn}".format(arn=vault['VaultARN']))
-except:
-	printException()
-	sys.exit(1)
+	if jobID == '':
+		logging.info('No existing job found, initiate inventory retrieval...')
+		try:
+			glacier_resource = boto3.resource('glacier')
+			vault = glacier_resource.Vault(accountId, vaultName)
+			job = vault.initiate_inventory_retrieval()
 
-logging.info('Getting jobs list...')
-response = glacier.list_jobs(vaultName=vaultName)
-jobID = ''
+			jobID = job.id
+		except:
+			printException()
+			sys.exit(1)
 
-# Check if a job already exists
-for job in response['JobList']:
-	if job['Action'] == 'InventoryRetrieval':
-		logging.info('Found existing inventory retrieval job...')
-		jobID = job['JobId']
+	logging.info('Job ID : %s', jobID)
 
-if jobID == '':
-	logging.info('No existing job found, initiate inventory retrieval...')
-	try:
-		glacier_resource = boto3.resource('glacier')
-		vault = glacier_resource.Vault(accountId, vaultName)
-		job = vault.initiate_inventory_retrieval()
-
-		jobID = job.id
-	except:
-		printException()
-		sys.exit(1)
-
-logging.info('Job ID : %s', jobID)
-
-# Get job status
-job = glacier.describe_job(vaultName=vaultName, jobId=jobID)
-
-logging.info('Job Creation Date: {d}'.format(d=job['CreationDate']))
-
-while job['StatusCode'] == 'InProgress':
-	# Job are usualy ready within 4hours of request.
-	logging.info('Inventory not ready, sleep for 10 mins...')
-
-	time.sleep(60*10)
-
+	# Get job status
 	job = glacier.describe_job(vaultName=vaultName, jobId=jobID)
 
-if __name__ == "__main__" and job['StatusCode'] == 'Succeeded':
-	logging.info('Inventory retrieved, parsing data...')
+	logging.info('Job Creation Date: {d}'.format(d=job['CreationDate']))
 
-	bufferSize = 5*1024*1024
+	while job['StatusCode'] == 'InProgress':
+		# Job are usualy ready within 4hours of request.
+		logging.info('Inventory not ready, sleep for 10 mins...')
 
-	class InventoryRead(object):
-		def __init__(self):
-			self.seek=0
-		def read(self,n):
-			returnvalue = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'],
-												 range='bytes=%d-%d' % (self.seek, self.seek + n))['body'].read(n).decode('utf-8')
-			self.seek += n
-			return returnvalue
+		time.sleep(60*10)
 
-		def get(self):
-			if bufferSize==-1:
-				job_output = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'])
-				inventory = json.loads(job_output['body'].read().decode('utf-8'))
-				for archive in inventory['ArchiveList']:
-					yield archive
-			else:
-				prefix = reader.read(bufferSize)
-				archiveList=None
-				for i in range(1, bufferSize):
-					try:
-						schema = json.loads(prefix[0:i] + ']}')
-						# Okay, we have our prefix
-						archiveList = prefix[i:]
-						prefix = prefix[0:i]
-						break
-					except:
-						pass
+		job = glacier.describe_job(vaultName=vaultName, jobId=jobID)
 
-				if archiveList is None:
-					logging.error('Error in the JSON format, can''t stream it from get_job_output')
+	if job['StatusCode'] == 'Succeeded':
+		logging.info('Inventory retrieved, parsing data...')
 
-				while True:
-					# read a big block
-					archiveList += self.read(bufferSize)
-					try:
-						inventory = json.loads(prefix+archiveList)
-						# if this parses, it means we are at the end of the list
+		bufferSize = -1
+
+		class InventoryRead(object):
+			def __init__(self):
+				self.seek=0
+			def read(self,n):
+				returnvalue = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'],
+													 range='bytes=%d-%d' % (self.seek, self.seek + n))['body'].read(n).decode('utf-8')
+				self.seek += n
+				return returnvalue
+
+			def get(self):
+				if bufferSize==-1:
+					job_output = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'])
+					with open('job_output_data.json','wb') as f:
+						shutil.copyfileobj(job_output['body'],f)
+					with open('job_output_data.json','r',encoding='utf-8') as f:
+						inventory = json.load(f)
 						for archive in inventory['ArchiveList']:
 							yield archive
-						break
-					except:
-						for i in range(1,5000):
-							# loooping, each loop removes a character until the string is valid json
-							try:
-								inventory = json.loads(prefix + archiveList[0:-i] + ']}')
-								# json parsed okay, we have our json string
-								for archive in inventory['ArchiveList']:
-									yield archive
-								break
-							except:
-								pass
+						yield im_done
+				else:
+					prefix = reader.read(bufferSize)
+					archiveList=None
+					for i in range(1, bufferSize):
+						try:
+							schema = json.loads(prefix[0:i] + ']}')
+							# Okay, we have our prefix
+							archiveList = prefix[i:]
+							prefix = prefix[0:i]
+							break
+						except:
+							pass
+
+					if archiveList is None:
+						logging.error('Error in the JSON format, can''t stream it from get_job_output')
+
+					while True:
+						# read a big block
+						archiveList += self.read(bufferSize)
+						try:
+							inventory = json.loads(prefix+archiveList)
+							# if this parses, it means we are at the end of the list
+							for archive in inventory['ArchiveList']:
+								yield archive
+							yield im_done
+							break
+						except:
+							for i in range(1,5000):
+								# loooping, each loop removes a character until the string is valid json
+								try:
+									inventory = json.loads(prefix + archiveList[0:-i] + ']}')
+									# json parsed okay, we have our json string
+									for archive in inventory['ArchiveList']:
+										yield archive
+									break
+								except:
+									pass
 
 
 
-	reader = InventoryRead()
+		reader = InventoryRead()
 
-	jobs = []
-	for i in range(numProcess):
-		p = Process(target=process_archive, args=(queue,))
-		jobs.append(p)
-		p.start()
+		jobs = []
+		for i in range(numProcess):
+			p = Process(target=process_archive, args=(queue,))
+			jobs.append(p)
+			p.start()
 
-	for archive in reader.get():
-		queue.put(archive)
+		for archive in reader.get():
+			queue.put(archive)
 
-	for j in jobs:
-		j.join()
+		for j in jobs:
+			j.join()
 
-	logging.info('Removing vault...')
-	try:
-		glacier.delete_vault(
-		    vaultName=vaultName
-		)
-		logging.info('Vault removed.')
-	except:
-		printException()
-		logging.error('We cant remove the vault now. Please wait some time and try again. You can also remove it from the AWS console, now that all archives have been removed.')
+		logging.info('Removing vault...')
+		try:
+			glacier.delete_vault(
+				vaultName=vaultName
+			)
+			logging.info('Vault removed.')
+		except:
+			printException()
+			logging.error('We cant remove the vault now. Please wait some time and try again. You can also remove it from the AWS console, now that all archives have been removed.')
 
-else:
-	logging.info('Vault retrieval failed.')
+	else:
+		logging.info('Vault retrieval failed.')
+
+if __name__ == '__main__':
+	main()

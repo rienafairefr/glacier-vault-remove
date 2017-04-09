@@ -64,3 +64,4 @@ target/
 
 # Jetbrains
 .idea
+job_output_data.json
