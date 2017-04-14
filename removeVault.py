@@ -83,6 +83,7 @@ parser = argparse.ArgumentParser(description='Removes a Glavier vault by first r
 parser.add_argument('-regionName',type=str,help='The name of the region')
 parser.add_argument('-vaultName',type=str,help='The name of the vault to remove, or LIST to list the vaults')
 parser.add_argument('--debug',action='store_true',help='An optional argument to generate debugging log events')
+parser.add_argument('--list',action='store_true',help='An optional argument to list the available vaults')
 parser.add_argument('-numProcess',type=int,help='The number of processes for treating the archives removal jobs')
 parser.add_argument('-bufferSize',type=str,default='-1',help='The size of the buffer, to stream json, 10B for 10 bytes'
 															 '10M for 10 Megabytes, ')
@@ -124,7 +125,7 @@ def main(args):
 	logging.info("Working on AccountID: {id}".format(id=accountId))
 
 	glacier = get_glacier(args)
-	if args.vaultName == 'LIST':
+	if args.list:
 		try:
 			logging.info('Getting list of vaults...')
 			response = glacier.list_vaults()
