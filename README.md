@@ -1,11 +1,16 @@
-glacier-vault-remove
+[![Coverage Status](https://coveralls.io/repos/github/rienafairefr/glacier-vault-remove/badge.svg?branch=master)](https://coveralls.io/github/rienafairefr/glacier-vault-remove?branch=master)
+glacier-vault-remove-stream
 ======================
 
 This tool can help you remove an Amazon Glacier vault, even if it's not empty.
 
 It will remove all archives contained inside the vault, and then remove the vault itself.
 
-It is intended to work well with vaults containing a lot of archives. I developed it because my vault contained more than 500'000 archives, and all other softwares crashed when I tried to remove all of them.
+It is intended to work well with vaults containing a LOT of archives. It was developed because of a  vault containing
+more than 500'000 archives, and all other softwares crashed when trying to remove all of them.
+
+An addition permits to potentially remove vaults containing even more arvhices, because the inventory json is
+streamed from amazon's servers and not parsed all in memory at once
 
 ## Install
 
@@ -31,19 +36,19 @@ Then create a `credentials.json` file in the same directory as `removeVault.py` 
 You can then use the script like this :
 
 ```shell
-python .\removeVault.py <region-name> [<vault-name>|LIST] [DEBUG] [NUM_PROCESSES]
+python .\removeVault.py -regionName <region-name> [--list] -vaultName <vault-name> [--debug] [-numProcess NUM_PROCESSES]
 ```
 
 Example :
 
 ```shell
-python .\removeVault.py eu-west-1 my_vault
+python .\removeVault.py -regionName eu-west-1 -vaultName my_vault
 ```
 
 Or if you want to perform the removal using multiple processes (4 processes here) :
 
 ```shell
-python .\removeVault.py eu-west-1 my_vault 4
+python .\removeVault.py -regionName eu-west-1 -vaultName my_vault -numProcess 4
 ```
 
 ## List
@@ -51,17 +56,29 @@ python .\removeVault.py eu-west-1 my_vault 4
 If you don't know the vault name, you can generate a list like this:
 
 ```shell
-python .\removeVault.py eu-west-1 LIST
+python .\removeVault.py --regionName eu-west-1 --list
 ```
+
+## JSON streaming
+
+By default, inventory is retrieved in full, and json loaded in memory all at once. If that fails because your vault contains too many archives
+you can specify a buffer size to stream the json, use a 'human' name for the bytes, like:
+
+```shell
+python .\removeVault.py --regionName eu-west-1 -vaultName my_vault -numProcess 4 -bufferSize 1M
+```
+
+to buffer stream the inventory by blocks of 1 MegaBytes
 
 ## Debug
 
-By default, only the INFO messages will be printed to console. You can add a third argument "DEBUG" to the removeVault.py script if you want to show all messages.
+By default, only the INFO messages will be printed to console. You can add a --debug argument to the removeVault.py script
+if you want to show all messages.
 
 Example :
 
 ```shell
-python .\removeVault.py eu-west-1 my_vault DEBUG
+python .\removeVault.py --regioName eu-west-1 --vaultName my_vault --debug
 ```
 
 ## Running the Docker container
@@ -79,7 +96,7 @@ Step 2) Create a credentials.json as described above
 Step 3) Run the tool in the docker container:
 
 ```
-docker run -v /path/to/credentials.json:/app/credentials.json glacier-vault-remove <region> <vault|LIST> [DEBUG] [NUM_PROCESSES]
+docker run -v /path/to/credentials.json:/app/credentials.json glacier-vault-remove -regionName <region> [--list] -vaultName <vault> [--debug] [-numProcess <numprocess>]
 ```
 
 Make sure you use the _full_ absolute path to `credentials.json`, relative paths do not work here.
