@@ -14,7 +14,8 @@ import shutil
 
 im_done = 'I''m done'
 queue = Queue(100)
-def process_archive(q):
+def process_archive(q,args):
+	glacier = get_glacier(args)
 	while True:
 		try:
 			archive = q.get(timeout=10)
@@ -30,7 +31,7 @@ def process_archive(q):
 			logging.info('%s Remove archive ID : %s', os.getpid(), archive['ArchiveId'])
 			try:
 				glacier.delete_archive(
-				    vaultName=vaultName,
+				    vaultName=args.vaultName,
 				    archiveId=archive['ArchiveId']
 				)
 			except:
@@ -42,7 +43,7 @@ def process_archive(q):
 				logging.info('Retry to remove archive ID : %s', archive['ArchiveId'])
 				try:
 					glacier.delete_archive(
-					    vaultName=vaultName,
+					    vaultName=args.vaultName,
 					    archiveId=archive['ArchiveId']
 					)
 					logging.info('Successfully removed archive ID : %s', archive['ArchiveId'])
@@ -57,57 +58,52 @@ def printException():
 # Default logging config
 logging.basicConfig(format='%(asctime)s - %(levelname)s : %(message)s', level=logging.INFO, datefmt='%H:%M:%S')
 
-# Get arguments
-if len(sys.argv) >= 3:
-	regionName = sys.argv[1]
-	vaultName = sys.argv[2]
-else:
-	# If there are missing arguments, display usage example and exit
-	logging.error('Usage: %s <region_name> [<vault_name>|LIST] [DEBUG] [NUMPROCESS]', sys.argv[0])
-	sys.exit(1)
+import argparse
 
-# Get custom logging level
-if len(sys.argv) == 4 and sys.argv[3] == 'DEBUG':
-	logging.info('Logging level set to DEBUG.')
-	logging.getLogger().setLevel(logging.DEBUG)
+parser = argparse.ArgumentParser(description='Removes a Glavier vault by first removing all archives in it')
+parser.add_argument('-regionName',type=str,help='The name of the region')
+parser.add_argument('-vaultName',type=str,help='The name of the vault to remove, or LIST to list the vaults')
+parser.add_argument('--debug',action='store_true',help='An optional argument to generate debugging log events')
+parser.add_argument('-numProcess',type=int,help='The number of processes for treating the archives removal jobs')
+parser.add_argument('-bufferSize',type=int,default=-1,help='The size of the buffer, in MiB, to stream json')
 
-# Get number of processes
-numProcess = 1
-if len(sys.argv) == 4:
-	if sys.argv[3].isdigit():
-		numProcess = int(sys.argv[3])
-elif len(sys.argv) == 5:
-	if sys.argv[4].isdigit():
-		numProcess = int(sys.argv[4])
-logging.info('Running with %s processes', numProcess)
 
-os.environ['AWS_DEFAULT_REGION'] = regionName
-# Load credentials
-try:
-	f = open('credentials.json', 'r')
-	config = json.loads(f.read())
-	f.close()
+def get_glacier(args):
+	regionName = args.regionName
+	# Get custom logging level
+	if args.debug:
+		logging.info('Logging level set to DEBUG.')
+		logging.getLogger().setLevel(logging.DEBUG)
 
-	os.environ['AWS_ACCESS_KEY_ID'] = config['AWSAccessKeyId']
-	os.environ['AWS_SECRET_ACCESS_KEY'] = config['AWSSecretKey']
+	os.environ['AWS_DEFAULT_REGION'] = regionName
+	# Load credentials
+	try:
+		f = open('credentials.json', 'r')
+		config = json.loads(f.read())
+		f.close()
 
-except:
-	logging.error('Cannot load "credentials.json" file... Assuming Role Authentication.')
+		os.environ['AWS_ACCESS_KEY_ID'] = config['AWSAccessKeyId']
+		os.environ['AWS_SECRET_ACCESS_KEY'] = config['AWSSecretKey']
+	except:
+		logging.error('Cannot load "credentials.json" file... Assuming Role Authentication.')
 
-sts_client = boto3.client("sts")
-accountId = sts_client.get_caller_identity()["Account"]
+	try:
+		logging.info('Connecting to Amazon Glacier...')
+		return boto3.client('glacier')
 
-logging.info("Working on AccountID: {id}".format(id=accountId))
+	except:
+		printException()
+		sys.exit(1)
 
-try:
-	logging.info('Connecting to Amazon Glacier...')
-	glacier = boto3.client('glacier')
-except:
-	printException()
-	sys.exit(1)
+def main(args):
+	vaultName = args.vaultName
+	sts_client = boto3.client("sts")
+	accountId = sts_client.get_caller_identity()["Account"]
 
-def main():
-	if vaultName == 'LIST':
+	logging.info("Working on AccountID: {id}".format(id=accountId))
+
+	glacier = get_glacier(args)
+	if args.vaultName == 'LIST':
 		try:
 			logging.info('Getting list of vaults...')
 			response = glacier.list_vaults()
@@ -168,7 +164,7 @@ def main():
 	if job['StatusCode'] == 'Succeeded':
 		logging.info('Inventory retrieved, parsing data...')
 
-		bufferSize = -1
+		bufferSize = args.bufferSize*1024*1024
 
 		class InventoryRead(object):
 			def __init__(self):
@@ -180,7 +176,7 @@ def main():
 				return returnvalue
 
 			def get(self):
-				if bufferSize==-1:
+				if args.bufferSize==-1:
 					job_output = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'])
 					with open('job_output_data.json','wb') as f:
 						shutil.copyfileobj(job_output['body'],f)
@@ -232,8 +228,8 @@ def main():
 		reader = InventoryRead()
 
 		jobs = []
-		for i in range(numProcess):
-			p = Process(target=process_archive, args=(queue,))
+		for i in range(args.numProcess):
+			p = Process(target=process_archive, args=(queue,args,))
 			jobs.append(p)
 			p.start()
 
@@ -246,7 +242,7 @@ def main():
 		logging.info('Removing vault...')
 		try:
 			glacier.delete_vault(
-				vaultName=vaultName
+				vaultName=args.vaultName
 			)
 			logging.info('Vault removed.')
 		except:
@@ -257,4 +253,5 @@ def main():
 		logging.info('Vault retrieval failed.')
 
 if __name__ == '__main__':
-	main()
+	arguments = parser.parse_args()
+	main(arguments)
