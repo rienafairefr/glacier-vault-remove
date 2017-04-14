@@ -1,7 +1,10 @@
 import unittest
 from collections import namedtuple
 from threading import Thread
-from unittest.mock import Mock, patch
+try:
+	from unittest.mock import Mock, patch
+except ImportError:
+	from mock import Mock, patch
 
 import boto3
 import sys
@@ -146,10 +149,10 @@ class Tests(unittest.TestCase):
 
 	def test_mock(self):
 		print('test_mock')
-		with patch.object(boto3,'client',mockclient),\
-			 patch.object(multiprocessing,'Process',mockProcess):
-			import removeVault
-			removeVault.main(testargs)
+		with patch.object(boto3,'client',mockclient):
+			with patch.object(multiprocessing,'Process',mockProcess):
+				import removeVault
+				removeVault.main(testargs)
 
 		self.assertTrue(checkEqual(results.deleted,list(map(str,range(Narchives)))),msg='Actually deleted:'+str(results.deleted))
 		self.assertTrue(results.removed)
@@ -163,21 +166,21 @@ class Tests(unittest.TestCase):
 
 		MockGlacierClient.removed=False
 
-		with patch.object(boto3, 'client', mockclient), \
-			 patch.object(multiprocessing, 'Process', mockProcess), \
-		     patch('test.MockGlacierClient',newMockGlacierClient):
-			import removeVault
-			removeVault.main(testargs)
+		with patch.object(boto3, 'client', mockclient):
+			with patch.object(multiprocessing, 'Process', mockProcess):
+				with patch('test.MockGlacierClient',newMockGlacierClient):
+					import removeVault
+					removeVault.main(testargs)
 
 			self.assertTrue(checkEqual(results.deleted, list(map(str, range(Narchives)))),msg='Actually deleted:'+str(results.deleted))
 		self.assertFalse(MockGlacierClient.removed)
 
 	def test_mock_with_buffer(self):
 		print('test_mock_with_buffer')
-		with patch.object(boto3,'client',mockclient),\
-			 patch.object(multiprocessing,'Process',mockProcess):
-			import removeVault
-			removeVault.main(testargs_buffer)
+		with patch.object(boto3,'client',mockclient):
+			with patch.object(multiprocessing,'Process',mockProcess):
+				import removeVault
+				removeVault.main(testargs_buffer)
 
 		self.assertTrue(checkEqual(results.deleted,list(map(str,range(Narchives)))),msg='Actually deleted:'+str(results.deleted))
 		self.assertTrue(results.removed)
@@ -189,10 +192,10 @@ class Tests(unittest.TestCase):
 			if string == 'glacier':
 				return MockGlacierClient(Narchives)
 		print('test_mock_with_buffer_large_data')
-		with patch.object(boto3,'client',mockclient2),\
-			 patch.object(multiprocessing,'Process',mockProcess):
-			import removeVault
-			removeVault.main(testargs_buffer_large_data)
+		with patch.object(boto3,'client',mockclient2):
+			with patch.object(multiprocessing,'Process',mockProcess):
+				import removeVault
+				removeVault.main(testargs_buffer_large_data)
 
 		self.assertTrue(checkEqual(results.deleted,list(map(str,range(Narchives)))),msg='Actually deleted:'+str(results.deleted))
 		self.assertTrue(results.removed)
@@ -210,13 +213,13 @@ class Tests(unittest.TestCase):
 			if string == 'glacier':
 				return client
 		print('test_mock_with_buffer_large_data')
-		with patch.object(boto3,'client',mockclient2),\
-			 patch.object(multiprocessing,'Process',mockProcess):
-			import removeVault
-			try:
-				removeVault.main(testargs3)
-			except SystemExit:
-				pass
+		with patch.object(boto3,'client',mockclient2):
+			with patch.object(multiprocessing,'Process',mockProcess):
+				import removeVault
+				try:
+					removeVault.main(testargs3)
+				except SystemExit:
+					pass
 
 		self.assertTrue(client.called)
 
@@ -247,14 +250,14 @@ class Tests(unittest.TestCase):
 			if string == 'glacier':
 				return MockGlacierResource2()
 		print('test_mock_with_buffer_large_data')
-		with patch.object(boto3,'client',mockclient2),\
-			 patch.object(boto3,'resource',mockresource2),\
-			 patch.object(multiprocessing,'Process',mockProcess):
-			import removeVault
-			try:
-				removeVault.main(testargs)
-			except SystemExit:
-				pass
+		with patch.object(boto3,'client',mockclient2):
+			with patch.object(boto3,'resource',mockresource2):
+				with patch.object(multiprocessing,'Process',mockProcess):
+					import removeVault
+					try:
+						removeVault.main(testargs)
+					except SystemExit:
+						pass
 		self.assertTrue(MockVault.called)
 
 if __name__ == '__main__':

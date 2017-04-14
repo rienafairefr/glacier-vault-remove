@@ -7,10 +7,15 @@ import json
 import time
 import os
 import logging
-from queue import Empty
-
+import six
 import boto3
-from multiprocessing import Process, Queue
+from multiprocessing import Process
+
+try:
+	from Queue import Queue, Empty
+except:
+	from queue import Queue, Empty
+
 import shutil
 
 im_done = 'I''m done'
