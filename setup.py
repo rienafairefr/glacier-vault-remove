@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 import json
 setup(
-    name = "GlacierVaultRemove",
-    version = "0.1",
+    name = "GlacierVaultRemove-Stream",
+    version = "0.1b",
     packages = find_packages(),
 
     # Project uses reStructuredText, so ensure that the docutils get
@@ -10,12 +10,12 @@ setup(
     install_requires = ['boto3>=1.4.4'],
 
     # metadata for upload to PyPI
-    author = "Leeroy Brun",
-    author_email = "leeroy.brun@gmail.com",
+    author = "Leeroy Brun - Matthieu Berthomé fork",
+    author_email = "rienafairefr@gmail.com",
     description = "Tool used to remove all archives stored inside an Amazon Glacier vault.",
     license = "MIT",
     keywords = "aws amazon glacier boto archives vaults",
-    url = "https://github.com/leeroybrun/glacier-vault-remove",
+    url = "https://github.com/rienafairefr/glacier-vault-remove",
 )
 
 with open("credentials.json", "w") as outfile:
