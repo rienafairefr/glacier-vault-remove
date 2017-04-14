@@ -7,9 +7,10 @@ import json
 import time
 import os
 import logging
+from queue import Empty
+
 import boto3
 from multiprocessing import Process, Queue
-from socket import gethostbyname, gaierror
 import shutil
 
 im_done = 'I''m done'
@@ -19,12 +20,13 @@ def process_archive(q,args):
 	while True:
 		try:
 			archive = q.get(timeout=10)
-		except Exception as e:
-			pass
+		except Empty:
+			time.sleep(1)
+			continue
+		except:
+			printException()
 
 		if archive == im_done:
-			#send it back in the queue for the other consumers
-			q.put(im_done)
 			break
 
 		if archive['ArchiveId'] != '':
@@ -184,7 +186,6 @@ def main(args):
 						inventory = json.load(f)
 						for archive in inventory['ArchiveList']:
 							yield archive
-						yield im_done
 				else:
 					prefix = reader.read(bufferSize)
 					archiveList=None
@@ -200,6 +201,7 @@ def main(args):
 
 					if archiveList is None:
 						logging.error('Error in the JSON format, can''t stream it from get_job_output')
+						return
 
 					while True:
 						# read a big block
@@ -209,7 +211,6 @@ def main(args):
 							# if this parses, it means we are at the end of the list
 							for archive in inventory['ArchiveList']:
 								yield archive
-							yield im_done
 							break
 						except:
 							for i in range(1,5000):
@@ -234,7 +235,12 @@ def main(args):
 			p.start()
 
 		for archive in reader.get():
+			logging.debug('queue put archive: '+str(archive))
 			queue.put(archive)
+
+		#put end of work tokens in the queue
+		for i in range(args.numProcess):
+			queue.put(im_done)
 
 		for j in jobs:
 			j.join()
