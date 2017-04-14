@@ -120,10 +120,6 @@ class MockGlacierResource(object):
 	pass
 
 
-def mockresource(string):
-	if string == 'glacier':
-		return MockGlacierResource()
-
 
 class mockProcess(object):
 	def __init__(self, target, args):
@@ -151,7 +147,6 @@ class Tests(unittest.TestCase):
 	def test_mock(self):
 		print('test_mock')
 		with patch.object(boto3,'client',mockclient),\
-			 patch.object(boto3,'resource',mockresource),\
 			 patch.object(multiprocessing,'Process',mockProcess):
 			import removeVault
 			removeVault.main(testargs)
@@ -169,7 +164,6 @@ class Tests(unittest.TestCase):
 		MockGlacierClient.removed=False
 
 		with patch.object(boto3, 'client', mockclient), \
-			 patch.object(boto3, 'resource', mockresource), \
 			 patch.object(multiprocessing, 'Process', mockProcess), \
 		     patch('test.MockGlacierClient',newMockGlacierClient):
 			import removeVault
@@ -181,7 +175,6 @@ class Tests(unittest.TestCase):
 	def test_mock_with_buffer(self):
 		print('test_mock_with_buffer')
 		with patch.object(boto3,'client',mockclient),\
-			 patch.object(boto3,'resource',mockresource),\
 			 patch.object(multiprocessing,'Process',mockProcess):
 			import removeVault
 			removeVault.main(testargs_buffer)
@@ -197,7 +190,6 @@ class Tests(unittest.TestCase):
 				return MockGlacierClient(Narchives)
 		print('test_mock_with_buffer_large_data')
 		with patch.object(boto3,'client',mockclient2),\
-			 patch.object(boto3,'resource',mockresource),\
 			 patch.object(multiprocessing,'Process',mockProcess):
 			import removeVault
 			removeVault.main(testargs_buffer_large_data)
@@ -219,7 +211,6 @@ class Tests(unittest.TestCase):
 				return client
 		print('test_mock_with_buffer_large_data')
 		with patch.object(boto3,'client',mockclient2),\
-			 patch.object(boto3,'resource',mockresource),\
 			 patch.object(multiprocessing,'Process',mockProcess):
 			import removeVault
 			try:
@@ -266,3 +257,5 @@ class Tests(unittest.TestCase):
 				pass
 		self.assertTrue(MockVault.called)
 
+if __name__ == '__main__':
+	unittest.main()
