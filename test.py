@@ -11,12 +11,13 @@ import multiprocessing
 
 vaultname = 'VAULTNAME'
 vaultarn = 'VAULTARN'
+accountid = 'ACCOUNTID'
 inventorydate = '2017-04-04T17:14:26Z'
 creationdate = '2016-02-08T21:28:06Z'
 
 class MockStsClient(object):
 	def get_caller_identity(self):
-		return {'Account': 1}
+		return {'Account': accountid}
 
 
 def _get_mock_data(narchives):
@@ -80,11 +81,11 @@ class Results(object):
 
 results = Results()
 
-Narchives = 10
 
 class MockGlacierClient(object):
-	def __init__(self):
+	def __init__(self, narchives):
 		results.reset()
+		self.narchives = narchives
 
 	def describe_vault(self, vaultName):
 		return {'VaultARN': vaultarn}
@@ -96,7 +97,7 @@ class MockGlacierClient(object):
 		return {'CreationDate': '2017-05-01', 'StatusCode': 'Succeeded', 'JobId': '1'}
 
 	def get_job_output(self, vaultName, jobId, range=None):
-		return {'body': MockDataStream(range, Narchives)}
+		return {'body': MockDataStream(range, self.narchives)}
 
 	def delete_archive(self, vaultName, archiveId):
 		if vaultName == vaultname:
@@ -106,11 +107,13 @@ class MockGlacierClient(object):
 		if vaultName == vaultname:
 			results.removed = True
 
+Narchives=10
+
 def mockclient(string):
 	if string == 'sts':
 		return MockStsClient()
 	if string == 'glacier':
-		return MockGlacierClient()
+		return MockGlacierClient(Narchives)
 
 
 class MockGlacierResource(object):
@@ -135,9 +138,10 @@ class mockProcess(object):
 		self.thread.join()
 
 TestArguments = namedtuple("TestArguments",['regionName','vaultName','numProcess','debug','bufferSize'])
-testargs = TestArguments("eu-west-1", vaultname,2, True,-1)
-testargs2 = TestArguments("eu-west-1", vaultname,2, True,1)
-
+testargs = TestArguments("eu-west-1", vaultname, 2, True,'-1')
+testargs_buffer = TestArguments("eu-west-1", vaultname, 2, True, '1M')
+testargs_buffer_large_data = TestArguments("eu-west-1", vaultname, 1, True, '100B')
+testargs3 = TestArguments("eu-west-1", 'LIST', 2, True,1)
 
 
 class Tests(unittest.TestCase):
@@ -180,7 +184,85 @@ class Tests(unittest.TestCase):
 			 patch.object(boto3,'resource',mockresource),\
 			 patch.object(multiprocessing,'Process',mockProcess):
 			import removeVault
-			removeVault.main(testargs2)
+			removeVault.main(testargs_buffer)
 
 		self.assertTrue(checkEqual(results.deleted,list(map(str,range(Narchives)))),msg='Actually deleted:'+str(results.deleted))
 		self.assertTrue(results.removed)
+
+	def test_mock_with_buffer_large_data(self):
+		def mockclient2(string):
+			if string == 'sts':
+				return MockStsClient()
+			if string == 'glacier':
+				return MockGlacierClient(Narchives)
+		print('test_mock_with_buffer_large_data')
+		with patch.object(boto3,'client',mockclient2),\
+			 patch.object(boto3,'resource',mockresource),\
+			 patch.object(multiprocessing,'Process',mockProcess):
+			import removeVault
+			removeVault.main(testargs_buffer_large_data)
+
+		self.assertTrue(checkEqual(results.deleted,list(map(str,range(Narchives)))),msg='Actually deleted:'+str(results.deleted))
+		self.assertTrue(results.removed)
+
+	def test_list_vaults(self):
+		class MockGlacierClient2(object):
+			def list_vaults(self):
+				self.called=True
+				return {'VaultList':[{'VaultName':vaultname}]}
+		client = MockGlacierClient2()
+		client.called=False
+		def mockclient2(string):
+			if string == 'sts':
+				return MockStsClient()
+			if string == 'glacier':
+				return client
+		print('test_mock_with_buffer_large_data')
+		with patch.object(boto3,'client',mockclient2),\
+			 patch.object(boto3,'resource',mockresource),\
+			 patch.object(multiprocessing,'Process',mockProcess):
+			import removeVault
+			try:
+				removeVault.main(testargs3)
+			except SystemExit:
+				pass
+
+		self.assertTrue(client.called)
+
+	def test_inventory_retrieval(self):
+		class MockGlacierClient3(object):
+			def list_jobs(s,vaultName):
+				self.assertEqual(vaultName, vaultname)
+				return {'JobList':[]}
+			def describe_vault(s, vaultName):
+				self.assertEqual(vaultName, vaultname)
+				return {'VaultARN': vaultarn}
+
+		def mockclient2(string):
+			if string == 'sts':
+				return MockStsClient()
+			if string == 'glacier':
+				return MockGlacierClient3()
+		class MockVault(object):
+			called = False
+			def initiate_inventory_retrieval(self):
+				MockVault.called=True
+		class MockGlacierResource2(object):
+			def Vault(s,accountId,vaultName):
+				self.assertEqual(accountId, accountid)
+				self.assertEqual(vaultName, vaultname)
+				return MockVault()
+		def mockresource2(string):
+			if string == 'glacier':
+				return MockGlacierResource2()
+		print('test_mock_with_buffer_large_data')
+		with patch.object(boto3,'client',mockclient2),\
+			 patch.object(boto3,'resource',mockresource2),\
+			 patch.object(multiprocessing,'Process',mockProcess):
+			import removeVault
+			try:
+				removeVault.main(testargs)
+			except SystemExit:
+				pass
+		self.assertTrue(MockVault.called)
+

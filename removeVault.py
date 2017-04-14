@@ -14,13 +14,14 @@ from multiprocessing import Process, Queue
 import shutil
 
 im_done = 'I''m done'
-queue = Queue(100)
+
 def process_archive(q,args):
 	glacier = get_glacier(args)
 	while True:
 		try:
 			archive = q.get(timeout=10)
 		except Empty:
+			# consumers are emptying the queue, wait a bit
 			time.sleep(1)
 			continue
 		except:
@@ -31,27 +32,23 @@ def process_archive(q,args):
 
 		if archive['ArchiveId'] != '':
 			logging.info('%s Remove archive ID : %s', os.getpid(), archive['ArchiveId'])
-			try:
-				glacier.delete_archive(
-				    vaultName=args.vaultName,
-				    archiveId=archive['ArchiveId']
-				)
-			except:
-				printException()
-
-				logging.info('Sleep 2s before retrying...')
-				time.sleep(2)
-
-				logging.info('Retry to remove archive ID : %s', archive['ArchiveId'])
+			for i in range(5):
 				try:
 					glacier.delete_archive(
-					    vaultName=args.vaultName,
-					    archiveId=archive['ArchiveId']
+						vaultName=args.vaultName,
+						archiveId=archive['ArchiveId']
 					)
-					logging.info('Successfully removed archive ID : %s', archive['ArchiveId'])
-				except:
-					logging.error('Cannot remove archive ID : %s', archive['ArchiveId'])
 					break
+				except:
+					printException()
+
+					logging.info('Sleep 5s before retrying...')
+					time.sleep(5)
+			else:
+				# failed all attempts,
+				logging.error('Failed removing an archive, killing that worker process')
+				return
+
 
 def printException():
 	exc_type, exc_value = sys.exc_info()[:2]
@@ -62,12 +59,33 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s : %(message)s', level=lo
 
 import argparse
 
+def human2bytes(s):
+	"""
+	>>> human2bytes('1M')
+	1048576
+	>>> human2bytes('1G')
+	1073741824
+	"""
+	symbols = ('B', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y')
+	letter = s[-1:].strip().upper()
+	num = s[:-1]
+	if not num.isdigit():
+		raise Exception('Expected a number, received {0}', num)
+	if not letter in symbols:
+		raise Exception('Expected a symbol in {0} at the end, received {1}',','.join(symbols),letter)
+	num = float(num)
+	prefix = {symbols[0]:1}
+	for i, s in enumerate(symbols[1:]):
+		prefix[s] = 1 << (i+1)*10
+	return int(num * prefix[letter])
+
 parser = argparse.ArgumentParser(description='Removes a Glavier vault by first removing all archives in it')
 parser.add_argument('-regionName',type=str,help='The name of the region')
 parser.add_argument('-vaultName',type=str,help='The name of the vault to remove, or LIST to list the vaults')
 parser.add_argument('--debug',action='store_true',help='An optional argument to generate debugging log events')
 parser.add_argument('-numProcess',type=int,help='The number of processes for treating the archives removal jobs')
-parser.add_argument('-bufferSize',type=int,default=-1,help='The size of the buffer, in MiB, to stream json')
+parser.add_argument('-bufferSize',type=str,default='-1',help='The size of the buffer, to stream json, 10B for 10 bytes'
+															 '10M for 10 Megabytes, ')
 
 
 def get_glacier(args):
@@ -98,6 +116,7 @@ def get_glacier(args):
 		sys.exit(1)
 
 def main(args):
+	queue = Queue(100)
 	vaultName = args.vaultName
 	sts_client = boto3.client("sts")
 	accountId = sts_client.get_caller_identity()["Account"]
@@ -116,7 +135,7 @@ def main(args):
 		for vault in response['VaultList']:
 			logging.info(vault['VaultName'])
 
-		exit(0)
+		sys.exit(0)
 
 	try:
 		logging.info('Getting selected vault... [{v}]'.format(v=vaultName))
@@ -158,15 +177,11 @@ def main(args):
 	while job['StatusCode'] == 'InProgress':
 		# Job are usualy ready within 4hours of request.
 		logging.info('Inventory not ready, sleep for 10 mins...')
-
 		time.sleep(60*10)
-
 		job = glacier.describe_job(vaultName=vaultName, jobId=jobID)
 
 	if job['StatusCode'] == 'Succeeded':
 		logging.info('Inventory retrieved, parsing data...')
-
-		bufferSize = args.bufferSize*1024*1024
 
 		class InventoryRead(object):
 			def __init__(self):
@@ -178,7 +193,7 @@ def main(args):
 				return returnvalue
 
 			def get(self):
-				if args.bufferSize==-1:
+				if args.bufferSize=='-1':
 					job_output = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'])
 					with open('job_output_data.json','wb') as f:
 						shutil.copyfileobj(job_output['body'],f)
@@ -187,6 +202,8 @@ def main(args):
 						for archive in inventory['ArchiveList']:
 							yield archive
 				else:
+					bufferSize = human2bytes(args.bufferSize)
+					logging.info('Using a '+args.bufferSize+' buffer size ='+str(bufferSize)+' bytes')
 					prefix = reader.read(bufferSize)
 					archiveList=None
 					for i in range(1, bufferSize):
@@ -213,16 +230,21 @@ def main(args):
 								yield archive
 							break
 						except:
-							for i in range(1,5000):
+							for i in range(1,bufferSize):
 								# loooping, each loop removes a character until the string is valid json
 								try:
-									inventory = json.loads(prefix + archiveList[0:-i] + ']}')
+									toparse = prefix + archiveList[0:-i] + ']}'
+									inventory = json.loads(toparse)
 									# json parsed okay, we have our json string
+									archiveList=archiveList[-i+1:]
 									for archive in inventory['ArchiveList']:
 										yield archive
 									break
 								except:
 									pass
+							else:
+								pass
+								# Continue reading in case the list doesnt even contain one archive (small buffer)
 
 
 
