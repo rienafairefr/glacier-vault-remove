@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # -*- coding: UTF-8 -*-
-
+import codecs
 import sys
 import json
 import time
@@ -203,7 +203,7 @@ def main(args):
 					job_output = glacier.get_job_output(vaultName=vaultName, jobId=job['JobId'])
 					with open('job_output_data.json','wb') as f:
 						shutil.copyfileobj(job_output['body'],f)
-					with open('job_output_data.json','r',encoding='utf-8') as f:
+					with codecs.open('job_output_data.json','r',encoding='utf-8') as f:
 						inventory = json.load(f)
 						for archive in inventory['ArchiveList']:
 							yield archive
