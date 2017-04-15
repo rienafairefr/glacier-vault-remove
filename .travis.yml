@@ -30,5 +30,5 @@ deploy:
   on:
     tags: true
     distributions: sdist bdist_wheel
-    repo: rienafairefr/glacier-vault-remove-stream
+    repo: rienafairefr/glacier-vault-remove
     condition: $TRAVIS_PYTHON_VERSION = "2.7"
