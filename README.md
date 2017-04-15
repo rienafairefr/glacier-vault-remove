@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/rienafairefr/glacier-vault-remove.svg?branch=master)](https://travis-ci.org/rienafairefr/glacier-vault-remove)
 [![Coverage Status](https://coveralls.io/repos/github/rienafairefr/glacier-vault-remove/badge.svg?branch=master)](https://coveralls.io/github/rienafairefr/glacier-vault-remove?branch=master)
 glacier-vault-remove-stream
 ======================
