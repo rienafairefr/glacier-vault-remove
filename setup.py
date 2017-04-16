@@ -21,6 +21,11 @@ setup(
     license = "MIT",
     keywords = "aws amazon glacier boto archives vaults",
     url = "https://github.com/rienafairefr/glacier-vault-remove",
+	entry_points={
+          'console_scripts': [
+              'glacier-vault = glaciervault:main'
+          ]
+      }
 )
 
 with open("credentials.json", "w") as outfile:
