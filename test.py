@@ -136,11 +136,12 @@ class mockProcess(object):
 	def join(self):
 		self.thread.join()
 
-TestArguments = namedtuple("TestArguments",['regionName','vaultName','numProcess','debug','bufferSize','list'])
-testargs = TestArguments("eu-west-1", vaultname, 2, True,'-1',False)
-testargs_buffer = TestArguments("eu-west-1", vaultname, 2, True, '1M',False)
-testargs_buffer_large_data = TestArguments("eu-west-1", vaultname, 1, True, '100B',False)
-testargs3 = TestArguments("eu-west-1", 'LIST', 2, True,1,True)
+TestArgumentsrm = namedtuple("TestArguments",['regionName','command','vaultName','numProcess','debug','bufferSize'])
+TestArgumentsls = namedtuple("TestArguments",['regionName','command','debug'])
+testargs = TestArgumentsrm("eu-west-1", 'rm', vaultname, 2, True,'-1')
+testargs_buffer = TestArgumentsrm("eu-west-1", 'rm',vaultname, 2, True, '1M')
+testargs_buffer_large_data = TestArgumentsrm("eu-west-1", 'rm',vaultname, 1, True, '100B')
+testargs3 = TestArgumentsls("eu-west-1", 'ls',True)
 
 
 class Tests(unittest.TestCase):
@@ -151,8 +152,8 @@ class Tests(unittest.TestCase):
 		print('test_mock')
 		with patch.object(boto3,'client',mockclient):
 			with patch.object(multiprocessing,'Process',mockProcess):
-				import removeVault
-				removeVault.main(testargs)
+				import glaciervault
+				glaciervault.main(testargs)
 
 		self.assertTrue(checkEqual(results.deleted,list(map(str,range(Narchives)))),msg='Actually deleted:'+str(results.deleted))
 		self.assertTrue(results.removed)
@@ -169,8 +170,8 @@ class Tests(unittest.TestCase):
 		with patch.object(boto3, 'client', mockclient):
 			with patch.object(multiprocessing, 'Process', mockProcess):
 				with patch('test.MockGlacierClient',newMockGlacierClient):
-					import removeVault
-					removeVault.main(testargs)
+					import glaciervault
+					glaciervault.main(testargs)
 
 			self.assertTrue(checkEqual(results.deleted, list(map(str, range(Narchives)))),msg='Actually deleted:'+str(results.deleted))
 		self.assertFalse(MockGlacierClient.removed)
@@ -179,8 +180,8 @@ class Tests(unittest.TestCase):
 		print('test_mock_with_buffer')
 		with patch.object(boto3,'client',mockclient):
 			with patch.object(multiprocessing,'Process',mockProcess):
-				import removeVault
-				removeVault.main(testargs_buffer)
+				import glaciervault
+				glaciervault.main(testargs_buffer)
 
 		self.assertTrue(checkEqual(results.deleted,list(map(str,range(Narchives)))),msg='Actually deleted:'+str(results.deleted))
 		self.assertTrue(results.removed)
@@ -194,8 +195,8 @@ class Tests(unittest.TestCase):
 		print('test_mock_with_buffer_large_data')
 		with patch.object(boto3,'client',mockclient2):
 			with patch.object(multiprocessing,'Process',mockProcess):
-				import removeVault
-				removeVault.main(testargs_buffer_large_data)
+				import glaciervault
+				glaciervault.main(testargs_buffer_large_data)
 
 		self.assertTrue(checkEqual(results.deleted,list(map(str,range(Narchives)))),msg='Actually deleted:'+str(results.deleted))
 		self.assertTrue(results.removed)
@@ -215,9 +216,9 @@ class Tests(unittest.TestCase):
 		print('test_mock_with_buffer_large_data')
 		with patch.object(boto3,'client',mockclient2):
 			with patch.object(multiprocessing,'Process',mockProcess):
-				import removeVault
+				import glaciervault
 				try:
-					removeVault.main(testargs3)
+					glaciervault.main(testargs3)
 				except SystemExit:
 					pass
 
@@ -253,9 +254,9 @@ class Tests(unittest.TestCase):
 		with patch.object(boto3,'client',mockclient2):
 			with patch.object(boto3,'resource',mockresource2):
 				with patch.object(multiprocessing,'Process',mockProcess):
-					import removeVault
+					import glaciervault
 					try:
-						removeVault.main(testargs)
+						glaciervault.main(testargs)
 					except SystemExit:
 						pass
 		self.assertTrue(MockVault.called)
