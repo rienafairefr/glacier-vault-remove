@@ -7,7 +7,7 @@ import json
 
 setup(
     name = "pyGlacierVault",
-    version = "0.1b",
+    version = "0.1c",
     packages = find_packages(),
 
     # Project uses reStructuredText, so ensure that the docutils get
