@@ -136,11 +136,12 @@ class mockProcess(object):
 	def join(self):
 		self.thread.join()
 
-TestArguments = namedtuple("TestArguments",['regionName','vaultName','numProcess','debug','bufferSize','list'])
-testargs = TestArguments("eu-west-1", vaultname, 2, True,'-1',False)
-testargs_buffer = TestArguments("eu-west-1", vaultname, 2, True, '1M',False)
-testargs_buffer_large_data = TestArguments("eu-west-1", vaultname, 1, True, '100B',False)
-testargs3 = TestArguments("eu-west-1", 'LIST', 2, True,1,True)
+TestArgumentsrm = namedtuple("TestArguments",['regionName','command','vaultName','numProcess','debug','bufferSize'])
+TestArgumentsls = namedtuple("TestArguments",['regionName','command','debug'])
+testargs = TestArgumentsrm("eu-west-1", 'rm', vaultname, 2, True,'-1')
+testargs_buffer = TestArgumentsrm("eu-west-1", 'rm',vaultname, 2, True, '1M')
+testargs_buffer_large_data = TestArgumentsrm("eu-west-1", 'rm',vaultname, 1, True, '100B')
+testargs3 = TestArgumentsls("eu-west-1", 'ls',True)
 
 
 class Tests(unittest.TestCase):

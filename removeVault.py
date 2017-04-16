@@ -85,13 +85,17 @@ def human2bytes(s):
 	return int(num * prefix[letter])
 
 parser = argparse.ArgumentParser(description='Removes a Glavier vault by first removing all archives in it')
-parser.add_argument('-regionName',type=str,help='The name of the region')
-parser.add_argument('-vaultName',type=str,help='The name of the vault to remove, or LIST to list the vaults')
-parser.add_argument('--debug',action='store_true',help='An optional argument to generate debugging log events')
-parser.add_argument('--list',action='store_true',help='An optional argument to list the available vaults')
-parser.add_argument('-numProcess',type=int,help='The number of processes for treating the archives removal jobs')
-parser.add_argument('-bufferSize',type=str,default='-1',help='The size of the buffer, to stream json, 10B for 10 bytes'
-															 '10M for 10 Megabytes, ')
+parser.add_argument('regionName',type=str,help='The name of the region')
+subparsers = parser.add_subparsers(help='commands',dest='command')
+list_parser=subparsers.add_parser('ls',help='list vaults in the region')
+remove_parser=subparsers.add_parser('rm', help='remove archives in selected vault')
+remove_parser.add_argument('vaultName', nargs='?', type=str, help='The name of the vault to remove')
+
+remove_parser.add_argument('numProcess', type=int, help='The number of processes for treating the archives removal jobs',
+                           nargs = '?', default=1)
+remove_parser.add_argument('bufferSize', type=str, default='-1', help='The size of the buffer, to stream json, 10B for 10 bytes'
+                                                             '10M for 10 Megabytes', nargs='?')
+parser.add_argument('--debug', action='store_true', help='An optional argument to generate debugging log events')
 
 
 def get_glacier(args):
@@ -123,14 +127,13 @@ def get_glacier(args):
 
 def main(args):
 	queue = Queue(100)
-	vaultName = args.vaultName
 	sts_client = boto3.client("sts")
 	accountId = sts_client.get_caller_identity()["Account"]
 
 	logging.info("Working on AccountID: {id}".format(id=accountId))
 
 	glacier = get_glacier(args)
-	if args.list:
+	if args.command=='ls':
 		try:
 			logging.info('Getting list of vaults...')
 			response = glacier.list_vaults()
@@ -142,6 +145,7 @@ def main(args):
 			logging.info(vault['VaultName'])
 
 		sys.exit(0)
+	vaultName = args.vaultName
 
 	try:
 		logging.info('Getting selected vault... [{v}]'.format(v=vaultName))
