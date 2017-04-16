@@ -5,8 +5,8 @@ RUN pip install boto3
 
 RUN mkdir -p /app
 
-COPY removeVault.py /app/
+COPY glacier-vault.py /app/
 
 WORKDIR /app
 
-ENTRYPOINT ["python", "/app/removeVault.py"]
+ENTRYPOINT ["python", "/app/glacier-vault.py"]

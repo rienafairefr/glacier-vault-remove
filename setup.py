@@ -1,7 +1,8 @@
 from setuptools import setup, find_packages
 import json
+
 setup(
-    name = "GlacierVaultRemove-Stream",
+    name = "pyGlacierVault",
     version = "0.1b",
     packages = find_packages(),
 
