@@ -109,7 +109,7 @@ def get_glacier(args):
 	os.environ['AWS_DEFAULT_REGION'] = regionName
 	# Load credentials
 	try:
-		print(os.path.abspath('credentials.json'))
+		logging.debug('loading credentials from ' +os.path.abspath('credentials.json'))
 		f = open('credentials.json', 'r')
 		config = json.loads(f.read())
 		f.close()
