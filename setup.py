@@ -6,7 +6,7 @@ import json
 
 setup(
     name = "pyglaciervault",
-    version = "0.2rc2",
+    version = "0.2rc10",
     packages = find_packages(),
 
     # Project uses reStructuredText, so ensure that the docutils get
@@ -20,10 +20,10 @@ setup(
     license = "MIT",
     keywords = "aws amazon glacier boto archives vaults",
     url = "https://github.com/rienafairefr/glacier-vault-remove",
-	entry_points='''
-	        [console_scripts]
-	        glaciervault=glaciervault:main
-	    ''',
+	py_modules = ['glacier_vault'],
+	entry_points={
+		'console_scripts':['glaciervault = glacier_vault:_main']
+	}
 )
 
 with open("credentials.json", "w") as outfile:

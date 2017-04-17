@@ -19,6 +19,7 @@ except:
 import shutil
 
 im_done = 'I''m done'
+print('glaciervault')
 
 def process_archive(q,args):
 	glacier = get_glacier(args)
@@ -108,6 +109,7 @@ def get_glacier(args):
 	os.environ['AWS_DEFAULT_REGION'] = regionName
 	# Load credentials
 	try:
+		print(os.path.abspath('credentials.json'))
 		f = open('credentials.json', 'r')
 		config = json.loads(f.read())
 		f.close()
@@ -127,12 +129,14 @@ def get_glacier(args):
 
 def main(args):
 	queue = Queue(100)
+	glacier = get_glacier(args)
+
 	sts_client = boto3.client("sts")
 	accountId = sts_client.get_caller_identity()["Account"]
 
 	logging.info("Working on AccountID: {id}".format(id=accountId))
 
-	glacier = get_glacier(args)
+
 	if args.command=='ls':
 		try:
 			logging.info('Getting list of vaults...')
@@ -290,6 +294,9 @@ def main(args):
 	else:
 		logging.info('Vault retrieval failed.')
 
-if __name__ == '__main__':
+def _main():
 	arguments = parser.parse_args()
 	main(arguments)
+
+if __name__ == '__main__':
+	_main()
