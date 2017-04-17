@@ -40,22 +40,22 @@ Then create a `credentials.json` file in the current directory:
 
 ## Use
 
-You can then use the script like this :
+You should then be able to use the script like this :
 
 ```shell
-python .\glaciervault.py <region-name> (ls|rm) [...]
+glaciervault <region-name> (ls|rm) [...]
 ```
 
 Example :
 
 ```shell
-python .\removeVault.py eu-west-1 rm my_vault
+glaciervault eu-west-1 rm my_vault
 ```
 
 Or if you want to perform the removal using multiple processes (4 processes here) :
 
 ```shell
-python .\removeVault.py eu-west-1 rm my_vault 4
+glaciervault eu-west-1 rm my_vault 4
 ```
 
 ## List
@@ -63,7 +63,7 @@ python .\removeVault.py eu-west-1 rm my_vault 4
 If you don't know the vault name, you can generate a list like this:
 
 ```shell
-python .\removeVault.py eu-west-1 ls
+glaciervault eu-west-1 ls
 ```
 
 ## JSON streaming
@@ -72,7 +72,7 @@ By default, inventory is retrieved in full, and json loaded in memory all at onc
 you can specify a buffer size to stream the json, use a 'human' name for the bytes, like:
 
 ```shell
-python .\removeVault.py eu-west-1 rm my_vault 4 1M
+glaciervault eu-west-1 rm my_vault 4 1M
 ```
 
 to buffer stream the inventory by blocks of 1 MegaBytes
@@ -85,7 +85,7 @@ if you want to show all messages.
 Example :
 
 ```shell
-python .\removeVault.py eu-west-1 rm my_vault --debug
+glaciervault eu-west-1 rm my_vault --debug
 ```
 
 ## Running the Docker container
@@ -113,6 +113,8 @@ Licence
 (The MIT License)
 
 Copyright (C) 2013 Leeroy Brun, www.leeroy.me
+some code (C) 2016 Matthieu Berthomé
+
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
