@@ -97,7 +97,7 @@ class MockGlacierClient(object):
 		return {'JobList': [{'Action': 'InventoryRetrieval', 'JobId': '1'}]}
 
 	def describe_job(self, vaultName, jobId):
-		return {'CreationDate': '2017-05-01', 'StatusCode': 'Succeeded', 'JobId': '1'}
+		return {'CreationDate': '2017-05-01', 'StatusCode': 'Succeeded', 'JobId': '1', 'InventorySizeInBytes':Narchives*10}
 
 	def get_job_output(self, vaultName, jobId, range=None):
 		return {'body': MockDataStream(range, self.narchives)}
@@ -135,6 +135,9 @@ class mockProcess(object):
 
 	def join(self):
 		self.thread.join()
+
+	def _identity(self):
+		return id(self)
 
 TestArgumentsrm = namedtuple("TestArguments",['regionName','command','vaultName','numProcess','debug','bufferSize'])
 TestArgumentsls = namedtuple("TestArguments",['regionName','command','debug'])
