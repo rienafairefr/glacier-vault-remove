@@ -7,29 +7,28 @@ import json
 import time
 import os
 import logging
-import six
+
 import boto3
-from multiprocessing import Process
+from multiprocessing import Process,Manager
 
 try:
 	from Queue import Queue, Empty
 except:
 	from queue import Queue, Empty
 
-queue = Queue(100)
-
 import shutil
 
 im_done = 'I''m done'
 
-def process_archive(args):
+def process_archive(q,args):
 	glacier = get_glacier(args)
 	while True:
 		try:
-			archive = queue.get(timeout=10)
+			archive = q.get(timeout=10)
+			logging.debug('queue get archive: %s',archive)
 		except Empty:
-			# consumers are emptying the queue, wait a bit
-			time.sleep(1)
+			logging.debug('consumers are emptying the queue, wait a bit...')
+			time.sleep(5)
 			continue
 		except:
 			printException()
@@ -86,6 +85,23 @@ def human2bytes(s):
 		prefix[s] = 1 << (i+1)*10
 	return int(num * prefix[letter])
 
+def bytes2human(n, format="%(value)i%(symbol)s"):
+	"""
+    >>> bytes2human(10000)
+    '9K'
+    >>> bytes2human(100001221)
+    '95M'
+    """
+	symbols = ('B', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y')
+	prefix = {}
+	for i, s in enumerate(symbols[1:]):
+		prefix[s] = 1 << (i+1)*10
+	for symbol in reversed(symbols[1:]):
+		if n >= prefix[symbol]:
+			value = float(n) / prefix[symbol]
+			return format % locals()
+	return format % dict(symbol=symbols[0], value=n)
+
 parser = argparse.ArgumentParser(description='Removes a Glavier vault by first removing all archives in it')
 parser.add_argument('regionName',type=str,help='The name of the region')
 subparsers = parser.add_subparsers(help='commands',dest='command')
@@ -129,6 +145,8 @@ def get_glacier(args):
 		sys.exit(1)
 
 def main(args):
+	manager = Manager()
+	queue = manager.Queue(100)
 	glacier = get_glacier(args)
 
 	sts_client = boto3.client("sts")
@@ -196,6 +214,7 @@ def main(args):
 
 	if job['StatusCode'] == 'Succeeded':
 		logging.info('Inventory retrieved, parsing data...')
+		logging.info('Inventory size %s',bytes2human(job['InventorySizeInBytes']))
 
 		class InventoryRead(object):
 			def __init__(self):
@@ -217,7 +236,7 @@ def main(args):
 							yield archive
 				else:
 					bufferSize = human2bytes(args.bufferSize)
-					logging.info('Using a '+args.bufferSize+' buffer size ='+str(bufferSize)+' bytes')
+					logging.info('Using a buffer size of '+args.bufferSize)
 					prefix = reader.read(bufferSize)
 					archiveList=None
 					for i in range(1, bufferSize):
@@ -266,12 +285,12 @@ def main(args):
 
 		jobs = []
 		for i in range(args.numProcess):
-			p = Process(target=process_archive, args=(args,))
+			p = Process(target=process_archive, args=(queue,args,))
 			jobs.append(p)
 			p.start()
 
 		for archive in reader.get():
-			logging.debug('queue put archive: '+str(archive))
+			logging.debug('queue put archive: %s',archive)
 			queue.put(archive)
 
 		#put end of work tokens in the queue
