@@ -113,7 +113,8 @@ remove_parser.add_argument('numProcess', type=int, help='The number of processes
                            nargs = '?', default=1)
 remove_parser.add_argument('bufferSize', type=str, default='-1', help='The size of the buffer, to stream json, 10B for 10 bytes'
                                                              '10M for 10 Megabytes', nargs='?')
-parser.add_argument('--debug', action='store_true', help='An optional argument to generate debugging log events')
+list_parser.add_argument('--debug', action='store_true', help='An optional argument to generate debugging log events')
+remove_parser.add_argument('--debug', action='store_true', help='An optional argument to generate debugging log events')
 
 
 def get_glacier(args):

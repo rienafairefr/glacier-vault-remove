@@ -6,7 +6,7 @@ import json
 
 setup(
     name = "pyglaciervault",
-    version = "0.2rc12",
+    version = "0.2rc13",
     packages = find_packages(),
 
     # Project uses reStructuredText, so ensure that the docutils get
