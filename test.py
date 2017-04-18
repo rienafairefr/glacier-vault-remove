@@ -136,8 +136,9 @@ class mockProcess(object):
 	def join(self):
 		self.thread.join()
 
+	@property
 	def _identity(self):
-		return id(self)
+		return ()
 
 TestArgumentsrm = namedtuple("TestArguments",['regionName','command','vaultName','numProcess','debug','bufferSize'])
 TestArgumentsls = namedtuple("TestArguments",['regionName','command','debug'])
