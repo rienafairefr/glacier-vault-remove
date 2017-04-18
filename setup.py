@@ -6,7 +6,7 @@ import json
 
 setup(
     name = "pyglaciervault",
-    version = "0.2rc10",
+    version = "0.2rc12",
     packages = find_packages(),
 
     # Project uses reStructuredText, so ensure that the docutils get
@@ -26,5 +26,11 @@ setup(
 	}
 )
 
-with open("credentials.json", "w") as outfile:
-    json.dump({'AWSAccessKeyId': '<key>', 'AWSSecretKey': '<secretkey>'}, outfile, indent=4)
+try:
+	with open("credentials.json", "r") as infile:
+		config = json.load(infile)
+		AWSAccessKeyId = config['AWSAccessKeyId']
+		AWSSecretKey = config['AWSSecretKey']
+except:
+	with open("credentials.json", "w") as outfile:
+		json.dump({'AWSAccessKeyId': '<key>', 'AWSSecretKey': '<secretkey>'}, outfile, indent=4)

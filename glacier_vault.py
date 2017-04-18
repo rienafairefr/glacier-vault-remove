@@ -16,16 +16,17 @@ try:
 except:
 	from queue import Queue, Empty
 
+queue = Queue(100)
+
 import shutil
 
 im_done = 'I''m done'
-print('glaciervault')
 
-def process_archive(q,args):
+def process_archive(args):
 	glacier = get_glacier(args)
 	while True:
 		try:
-			archive = q.get(timeout=10)
+			archive = queue.get(timeout=10)
 		except Empty:
 			# consumers are emptying the queue, wait a bit
 			time.sleep(1)
@@ -128,7 +129,6 @@ def get_glacier(args):
 		sys.exit(1)
 
 def main(args):
-	queue = Queue(100)
 	glacier = get_glacier(args)
 
 	sts_client = boto3.client("sts")
@@ -266,7 +266,7 @@ def main(args):
 
 		jobs = []
 		for i in range(args.numProcess):
-			p = Process(target=process_archive, args=(queue,args,))
+			p = Process(target=process_archive, args=(args,))
 			jobs.append(p)
 			p.start()
 
